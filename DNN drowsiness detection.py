@@ -21,7 +21,11 @@ def eye_aspect_ratio(eye):
     return ear
 
 #EAR임계값 설정
-EAR_THRESHOLD = 0.2
+EAR_THRESHOLD = 0.3
+
+#깜빡임 지속시간 설정 (3초)
+blink_start_time = 0
+BLINK_DURATION_THRESHOLD = 3
 
 #frame안의 양쪽눈의 EAR<임계값이면 빨간 박스로 표시
 cap = cv2.VideoCapture(0)
@@ -40,18 +44,39 @@ while True:
             (x, y, x_end, y_end) = box.astype("int")
 
             roi = frame[y:y_end, x:x_end]
-            gray = cv2.cvtColor(roi, cv2.COLOR_BGR2GRAY)
-            
+            try:
+                gray = cv2.cvtColor(roi, cv2.COLOR_BGR2GRAY)
+            except:
+                continue
             shape = predictor(gray, dlib.rectangle(0, 0, x_end-x, y_end-y))
             shape = np.array([[p.x + x, p.y + y] for p in shape.parts()])
             
             left_eye = shape[36:42]
             right_eye = shape[42:48]
-            
             left_ear = eye_aspect_ratio(left_eye)
             right_ear = eye_aspect_ratio(right_eye)
             
             ear = (left_ear + right_ear) / 2.0
             
             if ear < EAR_THRESHOLD:
-                cv2.rectangle(frame, (x, y), (x_end, y_end), (0, 0, 255), 2)
+                if blink_start_time == 0:
+                    blink_start_time = time.time()
+                cv2.rectangle(frame, (left_eye[0][0], left_eye[1][1]), (left_eye[3][0], left_eye[5][1]), (0, 0, 255), 2)
+                cv2.rectangle(frame, (right_eye[0][0], right_eye[1][1]), (right_eye[3][0], right_eye[5][1]), (0, 0, 255), 2)
+              #  cv2.rectangle(frame, (x, y), (x_end, y_end), (0, 0, 255), 2)
+            else:
+                blink_start_time = 0
+                cv2.rectangle(frame, (left_eye[0][0], left_eye[1][1]), (left_eye[3][0], left_eye[5][1]), (0, 255, 0), 2)
+                cv2.rectangle(frame, (right_eye[0][0], right_eye[1][1]), (right_eye[3][0], right_eye[5][1]), (0, 255, 0), 2)
+            
+            #운전자 졸음 감지 신호 출력
+            if blink_start_time != 0 and time.time() - blink_start_time > BLINK_DURATION_THRESHOLD:
+                print("check")
+                blink_start_time = 0
+    
+    cv2.imshow("Frame" , frame)
+    if cv2.waitKey(1) & 0xFF == ord('q'):
+        break
+
+cap.release()
+cv2.destroyAllWindows()
